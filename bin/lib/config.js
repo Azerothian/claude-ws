@@ -48,6 +48,37 @@ function loadConfigFile() {
 }
 
 /**
+ * Validate hostname to prevent command injection.
+ * @param {string} host
+ * @returns {boolean}
+ */
+function isValidHost(host) {
+  if (!host || typeof host !== 'string') {
+    return false;
+  }
+
+  // Allow: localhost, valid hostnames, and IP addresses
+  const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const localhostRegex = /^localhost$/i;
+  const allInterfacesRegex = /^(0\.0\.0\.0|::)$/i;
+
+  return hostnameRegex.test(host) ||
+         ipv4Regex.test(host) ||
+         localhostRegex.test(host) ||
+         allInterfacesRegex.test(host);
+}
+
+/**
+ * Validate port number.
+ * @param {number} port
+ * @returns {boolean}
+ */
+function isValidPort(port) {
+  return Number.isInteger(port) && port >= 1 && port <= 65535;
+}
+
+/**
  * Resolve the final configuration by merging defaults, config file, env vars,
  * and CLI flags (passed as an object).
  *
@@ -59,13 +90,24 @@ function resolve(cliFlags = {}) {
 
   const file = loadConfigFile();
 
-  const port = parseInt(
+  // Parse and validate port
+  let port = parseInt(
     cliFlags.port || process.env.PORT || file.port || DEFAULTS.port,
     10,
   );
 
-  const host =
-    cliFlags.host || process.env.HOST || file.host || DEFAULTS.host;
+  if (!isValidPort(port)) {
+    console.error(`[claude-ws] Error: Invalid port '${port}'. Using default port ${DEFAULTS.port}.`);
+    port = DEFAULTS.port;
+  }
+
+  // Validate host
+  let host = cliFlags.host || process.env.HOST || file.host || DEFAULTS.host;
+
+  if (!isValidHost(host)) {
+    console.error(`[claude-ws] Error: Invalid host '${host}'. Using default host '${DEFAULTS.host}'.`);
+    host = DEFAULTS.host;
+  }
 
   const dataDir =
     cliFlags['data-dir'] || process.env.DATA_DIR || file.dataDir || DEFAULTS.dataDir;

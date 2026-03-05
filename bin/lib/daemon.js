@@ -75,6 +75,29 @@ function checkRunning() {
 }
 
 /**
+ * Validate and sanitize a directory path to prevent path traversal attacks.
+ * @param {string} userPath - User-provided path
+ * @param {string} defaultDir - Default directory to use if invalid
+ * @returns {string} Safe, absolute path
+ */
+function validateDirPath(userPath, defaultDir) {
+  if (!userPath || typeof userPath !== 'string') {
+    return defaultDir;
+  }
+
+  // Resolve to absolute path
+  const resolved = path.resolve(userPath);
+
+  // Basic sanity check - reject obviously malicious paths
+  if (resolved.includes('\0') || resolved.includes('..')) {
+    console.error(`[claude-ws] Warning: Invalid path detected, using default: ${defaultDir}`);
+    return defaultDir;
+  }
+
+  return resolved;
+}
+
+/**
  * Spawn the claude-ws foreground process as a detached daemon.
  *
  * @param {{ port: number, host: string, dataDir: string, logDir: string, noOpen?: boolean }} opts
@@ -83,8 +106,12 @@ function checkRunning() {
 function daemonize(opts) {
   const entryPoint = path.resolve(__dirname, '..', 'claude-ws.js');
 
-  const stdoutPath = path.join(opts.logDir, 'claude-ws.log');
-  const stderrPath = path.join(opts.logDir, 'claude-ws-error.log');
+  // Validate and sanitize paths to prevent directory traversal
+  const safeLogDir = validateDirPath(opts.logDir, path.join(config.CLAUDE_WS_DIR, 'logs'));
+  const safeDataDir = validateDirPath(opts.dataDir, path.join(config.CLAUDE_WS_DIR, 'data'));
+
+  const stdoutPath = path.join(safeLogDir, 'claude-ws.log');
+  const stderrPath = path.join(safeLogDir, 'claude-ws-error.log');
 
   const stdoutFd = fs.openSync(stdoutPath, 'a');
   const stderrFd = fs.openSync(stderrPath, 'a');
@@ -93,7 +120,7 @@ function daemonize(opts) {
     ...process.env,
     PORT: String(opts.port),
     HOST: opts.host,
-    DATA_DIR: opts.dataDir,
+    DATA_DIR: safeDataDir, // Use validated path
     CLAUDE_WS_DAEMON: '1', // Signal to the entry point that this is a daemon child
   };
 

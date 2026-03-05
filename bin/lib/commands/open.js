@@ -2,30 +2,47 @@
  * `claude-ws open` — Open browser to the running instance.
  */
 
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const config = require('../config');
 const daemon = require('../daemon');
 
 /**
+ * Validate hostname to prevent command injection.
+ * @param {string} host
+ * @returns {boolean}
+ */
+function isValidHost(host) {
+  // Allow: localhost, valid hostnames, and IP addresses
+  const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const localhostRegex = /^localhost$/i;
+  return hostnameRegex.test(host) || ipv4Regex.test(host) || localhostRegex.test(host);
+}
+
+/**
  * Open a URL in the default browser (cross-platform).
+ * Uses spawn instead of exec to prevent command injection.
  * @param {string} url
  */
 function openUrl(url) {
   const platform = process.platform;
-  let cmd;
+  let command, args;
+
   if (platform === 'darwin') {
-    cmd = `open "${url}"`;
+    command = 'open';
+    args = [url];
   } else if (platform === 'win32') {
-    cmd = `start "" "${url}"`;
+    command = 'cmd';
+    args = ['/c', 'start', '', url];
   } else {
-    cmd = `xdg-open "${url}"`;
+    command = 'xdg-open';
+    args = [url];
   }
 
-  exec(cmd, (err) => {
-    if (err) {
-      console.log(`[claude-ws] Could not open browser. Visit: ${url}`);
-    }
-  });
+  spawn(command, args, {
+    detached: true,
+    stdio: 'ignore',
+  }).unref();
 }
 
 async function run(_argv) {
@@ -38,6 +55,21 @@ async function run(_argv) {
   }
 
   const conf = config.resolve({});
+
+  // Validate host to prevent command injection
+  if (!isValidHost(conf.host)) {
+    console.error(`[claude-ws] Error: Invalid host '${conf.host}'`);
+    console.error('[claude-ws] Host must be a valid hostname or IP address');
+    process.exit(1);
+  }
+
+  // Validate port range
+  if (conf.port < 1 || conf.port > 65535) {
+    console.error(`[claude-ws] Error: Invalid port '${conf.port}'`);
+    console.error('[claude-ws] Port must be between 1 and 65535');
+    process.exit(1);
+  }
+
   const url = `http://${conf.host}:${conf.port}`;
 
   console.log(`[claude-ws] Opening ${url} (PID ${pid})`);
