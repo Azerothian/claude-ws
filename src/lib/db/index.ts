@@ -1,44 +1,70 @@
 import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema';
 import path from 'path';
 import fs from 'fs';
 import { config } from 'dotenv';
 
-// Load .env from user's CWD (not packageRoot) for direct script usage
-const userCwd = process.env.CLAUDE_WS_USER_CWD || process.cwd();
-config({ path: path.join(userCwd, '.env') });
+// Lazy singleton — avoids SQLITE_BUSY when Next.js build spawns many workers
+let _sqlite: InstanceType<typeof Database> | null = null;
+let _db: BetterSQLite3Database<typeof schema> | null = null;
+let _initialized = false;
 
-// Database file path - use DATA_DIR from env if configured, otherwise user's CWD
-const DB_DIR = process.env.DATA_DIR || path.join(userCwd, 'data');
-const DB_PATH = path.join(DB_DIR, 'claude-ws.db');
+function getSqlite(): InstanceType<typeof Database> {
+  if (_sqlite) return _sqlite;
 
-// Ensure data directory exists
-const dataDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+  // Load .env from user's CWD (not packageRoot) for direct script usage
+  const userCwd = process.env.CLAUDE_WS_USER_CWD || process.cwd();
+  config({ path: path.join(userCwd, '.env') });
+
+  // Database file path - use DATA_DIR from env if configured, otherwise user's CWD
+  const DB_DIR = process.env.DATA_DIR || path.join(userCwd, 'data');
+  const DB_PATH = path.join(DB_DIR, 'claude-ws.db');
+
+  // Ensure data directory exists
+  const dataDir = path.dirname(DB_PATH);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  // Ensure data/tmp directory exists for formatted output files
+  const tmpDir = path.join(dataDir, 'tmp');
+  if (!fs.existsSync(tmpDir)) {
+    fs.mkdirSync(tmpDir, { recursive: true });
+  }
+
+  // Create SQLite connection
+  _sqlite = new Database(DB_PATH);
+
+  // Set busy timeout to handle concurrent access
+  _sqlite.pragma('busy_timeout = 5000');
+
+  // Enable WAL mode for better concurrency
+  _sqlite.pragma('journal_mode = WAL');
+
+  // Enable foreign key constraints (required for CASCADE deletes to work)
+  _sqlite.pragma('foreign_keys = ON');
+
+  return _sqlite;
 }
 
-// Ensure data/tmp directory exists for formatted output files
-const tmpDir = path.join(dataDir, 'tmp');
-if (!fs.existsSync(tmpDir)) {
-  fs.mkdirSync(tmpDir, { recursive: true });
-}
-
-// Create SQLite connection
-const sqlite = new Database(DB_PATH);
-
-// Enable WAL mode for better concurrency
-sqlite.pragma('journal_mode = WAL');
-
-// Enable foreign key constraints (required for CASCADE deletes to work)
-sqlite.pragma('foreign_keys = ON');
-
-// Create Drizzle ORM instance
-export const db = drizzle(sqlite, { schema });
+/** Lazy db accessor — connection is created on first use, not on import */
+export const db: BetterSQLite3Database<typeof schema> = new Proxy({} as BetterSQLite3Database<typeof schema>, {
+  get(_target, prop, receiver) {
+    if (!_db) {
+      _db = drizzle(getSqlite(), { schema });
+    }
+    if (!_initialized) {
+      _initialized = true;
+      initDb();
+    }
+    return Reflect.get(_db, prop, receiver);
+  },
+});
 
 // Initialize database tables
 export function initDb() {
+  const sqlite = getSqlite();
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
@@ -302,8 +328,5 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_subagents_attempt ON subagents(attempt_id);
   `);
 }
-
-// Initialize on first import
-initDb();
 
 export { schema };

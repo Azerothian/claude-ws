@@ -7,6 +7,7 @@ import {
 } from '@/components/auth/agent-provider-dialog';
 
 import { UnifiedSetupWizard } from '@/components/setup/unified-setup-wizard';
+import { ClaudeCodeTerminalModal } from '@/components/setup/claude-code-terminal-modal';
 
 /**
  * Check if current hostname is localhost
@@ -25,6 +26,7 @@ function isLocalhost(): boolean {
 export function UnifiedSetupProvider({ children }: { children: React.ReactNode }) {
   const [showWizard, setShowWizard] = useState(false);
   const [showStandaloneDialog, setShowStandaloneDialog] = useState(false);
+  const [showClaudeTerminal, setShowClaudeTerminal] = useState(false);
   const [checked, setChecked] = useState(false);
   const [isLocal, setIsLocal] = useState(true);
   const [remoteNeedsApiKey, setRemoteNeedsApiKey] = useState(false);
@@ -120,6 +122,20 @@ export function UnifiedSetupProvider({ children }: { children: React.ReactNode }
         setShowWizard(true);
       }
 
+      // Auto-show Claude Code terminal if ~/.claude doesn't exist and hasn't been shown before
+      const claudeSetupShown = localStorage.getItem('claude_code_setup_shown') === 'true';
+      if (!claudeSetupShown) {
+        try {
+          const claudeRes = await fetch('/api/settings/claude-setup');
+          const claudeData = await claudeRes.json();
+          if (!claudeData.configured) {
+            setShowClaudeTerminal(true);
+          }
+        } catch {
+          // Ignore — don't block startup
+        }
+      }
+
       setChecked(true);
     };
 
@@ -160,6 +176,18 @@ export function UnifiedSetupProvider({ children }: { children: React.ReactNode }
       <AgentProviderDialog
         open={showStandaloneDialog}
         onOpenChange={setShowStandaloneDialog}
+      />
+      <ClaudeCodeTerminalModal
+        open={showClaudeTerminal}
+        onOpenChange={(open) => {
+          setShowClaudeTerminal(open);
+          if (!open) {
+            localStorage.setItem('claude_code_setup_shown', 'true');
+          }
+        }}
+        onComplete={() => {
+          localStorage.setItem('claude_code_setup_shown', 'true');
+        }}
       />
     </>
   );

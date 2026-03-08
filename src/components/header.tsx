@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Plus, Search, PanelLeft, PanelRight, FolderTree, MessageCircleQuestion, Network, Terminal, X } from 'lucide-react';
+import { Settings, Plus, Search, PanelLeft, PanelRight, FolderTree, MessageCircleQuestion, Network, Terminal, SquareTerminal, Bot, X } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,8 @@ import { ProjectSelector, ProjectSelectorContent } from '@/components/header/pro
 import { useQuestionsStore } from '@/stores/questions-store';
 import { useWorkflowStore } from '@/stores/workflow-store';
 import { useTranslations } from 'next-intl';
+import { ClaudeCodeTerminalModal } from '@/components/setup/claude-code-terminal-modal';
+import { BashTerminalModal } from '@/components/setup/bash-terminal-modal';
 
 interface HeaderProps {
   onCreateTask: () => void;
@@ -50,6 +52,8 @@ export function Header({ onCreateTask, onAddProject, searchQuery: externalSearch
   const { isOpen: workflowPanelOpen, togglePanel: toggleWorkflowPanel, getActiveAgentCount } = useWorkflowStore();
   const activeAgentCount = getActiveAgentCount();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [claudeCodeOpen, setClaudeCodeOpen] = useState(false);
+  const [bashTerminalOpen, setBashTerminalOpen] = useState(false);
 
   // Fetch pending questions on mount
   useEffect(() => {
@@ -227,6 +231,46 @@ export function Header({ onCreateTask, onAddProject, searchQuery: externalSearch
             </Tooltip>
           </TooltipProvider>
 
+          {/* Claude Code button */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setClaudeCodeOpen(true)}
+                  className="shrink-0 hidden sm:inline-flex"
+                  data-testid="claude-code-button"
+                >
+                  <Bot className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Claude Code CLI</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Bash Console button */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setBashTerminalOpen(true)}
+                  className="shrink-0 hidden sm:inline-flex"
+                  data-testid="bash-terminal-button"
+                >
+                  <SquareTerminal className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Bash Console</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
           {/* Terminal toggle */}
           <TooltipProvider>
             <Tooltip>
@@ -300,6 +344,8 @@ export function Header({ onCreateTask, onAddProject, searchQuery: externalSearch
           </div>
         </div>
       )}
+      <ClaudeCodeTerminalModal open={claudeCodeOpen} onOpenChange={setClaudeCodeOpen} />
+      <BashTerminalModal open={bashTerminalOpen} onOpenChange={setBashTerminalOpen} />
     </header>
   );
 }

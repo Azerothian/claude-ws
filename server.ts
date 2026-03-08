@@ -679,11 +679,19 @@ app.prepare().then(async () => {
     // ========================================
 
     socket.on('terminal:create', async (
-      data: { projectId?: string; cols?: number; rows?: number },
+      data: { projectId?: string; cols?: number; rows?: number; command?: string; commandArgs?: string[] },
       ack?: (result: { success: boolean; terminalId?: string; error?: string }) => void
     ) => {
       log.info('[Server] Creating terminal session');
       try {
+        // Whitelist validation for custom commands
+        const ALLOWED_COMMANDS = ['claude', 'bash', 'sh', 'zsh'];
+        if (data.command && !ALLOWED_COMMANDS.includes(data.command)) {
+          log.error({ command: data.command }, '[Server] Rejected disallowed command');
+          if (ack) ack({ success: false, error: `Command not allowed: ${data.command}` });
+          return;
+        }
+
         // Resolve CWD: try project path if projectId given, fallback to user CWD
         let cwd = userCwd;
         if (data.projectId) {
@@ -698,6 +706,8 @@ app.prepare().then(async () => {
           cwd,
           cols: data.cols,
           rows: data.rows,
+          command: data.command,
+          commandArgs: data.commandArgs,
         });
 
         socket.join(`terminal:${terminalId}`);

@@ -1,0 +1,10 @@
+FROM mcr.microsoft.com/playwright:v1.50.0-noble
+
+WORKDIR /tests
+
+COPY playwright.config.ts ./
+COPY e2e/ ./e2e/
+
+RUN npm install @playwright/test@1.50.0
+
+ENTRYPOINT ["npx", "playwright", "test"]

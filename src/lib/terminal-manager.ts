@@ -37,6 +37,8 @@ export interface TerminalCreateOptions {
   cols?: number;
   rows?: number;
   shell?: string;
+  command?: string;
+  commandArgs?: string[];
 }
 
 class TerminalManager extends EventEmitter {
@@ -48,12 +50,14 @@ class TerminalManager extends EventEmitter {
   }
 
   create(options: TerminalCreateOptions): string {
-    const { projectId, cwd, cols = 80, rows = 24, shell } = options;
+    const { projectId, cwd, cols = 80, rows = 24, shell, command, commandArgs } = options;
     const terminalId = nanoid();
 
-    const shellConfig = shell
-      ? { file: shell, args: [] as string[], env: { TERM: 'xterm-256color' } }
-      : detectShell();
+    const shellConfig = command
+      ? { file: command, args: commandArgs || [], env: { TERM: 'xterm-256color' } }
+      : shell
+        ? { file: shell, args: [] as string[], env: { TERM: 'xterm-256color' } }
+        : detectShell();
 
     log.info({ terminalId, shell: shellConfig.file, cwd, cols, rows },
       'Creating terminal session');

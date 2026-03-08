@@ -16,14 +16,16 @@ import { AgentProviderSetupForm } from '@/components/auth/agent-provider-dialog'
 import { ApiAccessKeySetupForm } from '@/components/access-anywhere/api-access-key-setup-modal';
 import { useTunnelStore } from '@/stores/tunnel-store';
 import { cn } from '@/lib/utils';
-import { Check, ChevronDown, Bot, Shield, Globe } from 'lucide-react';
+import { Check, ChevronDown, Bot, Shield, Globe, Terminal } from 'lucide-react';
+import { ClaudeCodeTerminalModal } from '@/components/setup/claude-code-terminal-modal';
 
-type SectionId = 'agent-provider' | 'api-access-key' | 'remote-access';
+type SectionId = 'agent-provider' | 'api-access-key' | 'remote-access' | 'claude-code';
 
 interface SectionStatus {
   agentProvider: boolean;
   apiAccessKey: boolean;
   remoteAccess: boolean;
+  claudeCode: boolean;
 }
 
 interface UnifiedSetupWizardProps {
@@ -40,8 +42,10 @@ export function UnifiedSetupWizard({ open, onOpenChange, initialStatus }: Unifie
     agentProvider: initialStatus?.agentProvider ?? false,
     apiAccessKey: initialStatus?.apiAccessKey ?? false,
     remoteAccess: initialStatus?.remoteAccess ?? false,
+    claudeCode: initialStatus?.claudeCode ?? false,
   });
   const [doNotShowAgain, setDoNotShowAgain] = useState(false);
+  const [claudeModalOpen, setClaudeModalOpen] = useState(false);
   const hasAutoExpanded = useRef(false);
 
   const { setWizardOpen } = useTunnelStore();
@@ -53,6 +57,7 @@ export function UnifiedSetupWizard({ open, onOpenChange, initialStatus }: Unifie
         agentProvider: initialStatus.agentProvider ?? prev.agentProvider,
         apiAccessKey: initialStatus.apiAccessKey ?? prev.apiAccessKey,
         remoteAccess: initialStatus.remoteAccess ?? prev.remoteAccess,
+        claudeCode: initialStatus.claudeCode ?? prev.claudeCode,
       }));
     }
   }, [initialStatus]);
@@ -230,7 +235,54 @@ export function UnifiedSetupWizard({ open, onOpenChange, initialStatus }: Unifie
               </div>
             )}
           </div>
+          {/* Section 4: Claude Code CLI */}
+          <div className="border rounded-lg overflow-hidden">
+            <button
+              onClick={() => toggleSection('claude-code')}
+              className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'p-1.5 rounded-md',
+                  status.claudeCode ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-primary/10 text-primary'
+                )}>
+                  {status.claudeCode ? <Check className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
+                </div>
+                <div>
+                  <span className="font-medium">Claude Code CLI</span>
+                  <p className="text-xs text-muted-foreground">
+                    {status.claudeCode ? tCommon('configured') : 'Set up Claude Code in your terminal'}
+                  </p>
+                </div>
+              </div>
+              <ChevronDown className={cn(
+                'h-4 w-4 text-muted-foreground transition-transform',
+                expandedSection === 'claude-code' && 'rotate-180'
+              )} />
+            </button>
+            {expandedSection === 'claude-code' && (
+              <div className="border-t px-4 py-4">
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Launch the Claude Code CLI to set up your development environment. This opens an interactive terminal session.
+                  </p>
+                  <Button onClick={() => setClaudeModalOpen(true)} data-testid="launch-claude-code">
+                    Launch Claude Code
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+
+        <ClaudeCodeTerminalModal
+          open={claudeModalOpen}
+          onOpenChange={setClaudeModalOpen}
+          onComplete={() => {
+            setStatus(prev => ({ ...prev, claudeCode: true }));
+            setClaudeModalOpen(false);
+          }}
+        />
 
         {/* Footer */}
         <div className="flex items-center justify-between p-6 pt-4 border-t shrink-0">

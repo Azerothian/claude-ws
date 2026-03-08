@@ -67,6 +67,10 @@ interface TerminalActions {
   /** Paste pre-read text via xterm.paste() — keeps IME state clean */
   pasteText: (id: string, text: string) => void;
   clearTerminal: (id: string) => void;
+  /** Create a command terminal (not added to tab bar) for modal use */
+  createCommandTerminal: (command?: string, commandArgs?: string[]) => Promise<string | null>;
+  /** Destroy a command terminal by killing its PTY */
+  destroyCommandTerminal: (terminalId: string) => void;
 }
 
 type TerminalStore = TerminalState & TerminalActions;
@@ -290,6 +294,40 @@ export const useTerminalStore = create<TerminalStore>()(
       pasteClipboard: (id) => get()._terminalActions[id]?.pasteClipboard(),
       pasteText: (id, text) => get()._terminalActions[id]?.pasteText(text),
       clearTerminal: (id) => get()._terminalActions[id]?.clearTerminal(),
+
+      createCommandTerminal: async (command, commandArgs) => {
+        get()._attachListeners();
+        const socket = getSocket();
+        await waitForConnection(socket);
+
+        return new Promise((resolve) => {
+          const timeout = setTimeout(() => {
+            log.error('Command terminal create timed out');
+            resolve(null);
+          }, 8000);
+
+          socket.emit(
+            'terminal:create',
+            {
+              ...(command ? { command, commandArgs } : {}),
+            },
+            (result: { success: boolean; terminalId?: string; error?: string }) => {
+              clearTimeout(timeout);
+              if (result.success && result.terminalId) {
+                resolve(result.terminalId);
+              } else {
+                log.error({ error: result.error }, 'Failed to create command terminal');
+                resolve(null);
+              }
+            }
+          );
+        });
+      },
+
+      destroyCommandTerminal: (terminalId) => {
+        const socket = getSocket();
+        socket.emit('terminal:close', { terminalId });
+      },
     }),
     {
       name: 'terminal-store',
